@@ -6,9 +6,10 @@ Student ID: 101011969
 
 ---
 
-## Assignment 1 — Real-Time Streaming with Apache Kafka
+## Assignment 1 — Real-Time Streaming Engine
 
 Demo link: <https://youtu.be/9Ra1tTJrD8g>
+
 ENGR 5785G Assignment 1. End-to-end Kafka pipeline that replays hourly weather observations as a live
 stream, runs an offline-trained regression model in a Faust streams app, and prints predictions from a
 downstream consumer.
