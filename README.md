@@ -179,3 +179,146 @@ assignment_1/
     ├── streams_app.py          Faust agent: raw-weather -> predictions
     └── consumer.py             predictions -> stdout
 ```
+
+---
+
+## Assignment 2 — SmartFactory IoT Protocol Integration
+
+ENGR 5785G Assignment 2. Multi-protocol IoT backend for a simulated factory with
+2 production lines × 3 sensors (temperature, vibration, power). Implements MQTT
+pub/sub with QoS levels, CoAP observable resources with Block2 transfer, and an
+HTTP→CoAP cross-protocol proxy. AMQP (Task 3) was excluded from scope.
+
+All assignment files live in [assignment_2/](assignment_2/). The instructions below
+assume you `cd assignment_2` before running anything.
+
+### Stack
+
+- **MQTT:** `paho-mqtt` — publisher with LWT + persistent session, wildcard subscriber
+- **CoAP:** `aiocoap[all]` — observable sensor resources, Block2 manifest, actuator PUT
+- **HTTP proxy:** `aiohttp` — HTTP→CoAP cross-protocol bridge (RFC 8075)
+- **Broker:** Mosquitto via Docker Compose
+- **Testing:** `pytest` + `pytest-asyncio`
+
+### Factory Setup
+
+| | Line 1 | Line 2 |
+|---|---|---|
+| Temperature (°C) | QoS 1 / Observable | QoS 1 / Observable |
+| Vibration (mm/s) | QoS 0 / Observable | — |
+| Power (kW) | QoS 2 | — |
+| Cooling fan | PUT /actuator/line1/fan | — |
+
+Critical alert threshold: temperature > 85 °C.
+
+### Setup
+
+```powershell
+cd assignment_2
+uv venv
+.\.venv\Scripts\Activate.ps1
+uv pip install -r requirements.txt
+docker compose up -d mosquitto    # start MQTT broker
+```
+
+### Run individual tasks
+
+```powershell
+# Task 1 — MQTT (requires mosquitto running)
+python -m src.mqtt.publisher      # Terminal 1
+python -m src.mqtt.subscriber     # Terminal 2
+
+# Task 2 — CoAP (no broker required)
+python -m src.coap.server         # Terminal 1
+python -m src.coap.observer       # Terminal 2
+
+# Task 2.3 — CoAP-HTTP proxy (requires CoAP server running)
+python -m src.coap.proxy          # serves http://localhost:8080
+# curl http://localhost:8080/factory/line1/temperature
+```
+
+### Tests
+
+```powershell
+# MQTT publisher + subscriber (no broker required — uses mocks)
+pytest tests/mqtt/test_publisher.py -v
+
+# MQTT QoS comparison (requires Docker Mosquitto on localhost:1883)
+pytest tests/mqtt/test_qos_loss.py -v -s
+
+# CoAP server resources
+pytest tests/coap/test_server.py -v
+
+# CoAP-HTTP proxy integration
+pytest tests/coap/test_proxy.py -v
+
+# Full non-AMQP suite
+pytest tests/mqtt/test_publisher.py tests/coap/ -v
+```
+
+All non-AMQP tests pass (28 tests): 11 MQTT unit tests, 10 CoAP server tests, 7 proxy tests.
+
+### Windows-specific notes
+
+aiocoap requires `SelectorEventLoop` on Windows (default is `ProactorEventLoop`).
+The `conftest.py` at the project root sets this automatically alongside a compatibility
+shim for `pytest-asyncio` 0.21.x + pytest 8.x. The CoAP server binds to `[::1]:5683`
+because Windows resolves `localhost` to `::1` (IPv6) before `127.0.0.1`.
+
+### Packet captures
+
+With Wireshark installed (`winget install Wireshark.Wireshark`):
+
+```powershell
+# Start publisher + server first, then:
+python scripts/capture_win.py     # captures mqtt.pcap + coap.pcap in captures/
+```
+
+### Architecture
+
+```
+[Sensors: line1/line2 × temperature/vibration/power]
+              |
+      MQTT (paho)          CoAP (aiocoap)
+      publisher.py         server.py
+          |                    |
+     Mosquitto            aiocoap server
+     broker                ::1:5683
+          |                    |
+    subscriber.py         observer.py   proxy.py
+    (wildcard + alerts)   (Observe +    (HTTP:8080
+                           Block2)       → CoAP)
+```
+
+### Repo layout
+
+```
+assignment_2/
+├── docker-compose.yml          Mosquitto + RabbitMQ + InfluxDB
+├── requirements.txt
+├── conftest.py                 Windows event-loop + pytest-asyncio shims
+├── pytest.ini
+├── src/
+│   ├── mqtt/
+│   │   ├── publisher.py        Task 1.1 — 6-sensor MQTT publisher, LWT, QoS per type
+│   │   └── subscriber.py       Task 1.2 — wildcard subscriber, critical alerts
+│   ├── coap/
+│   │   ├── server.py           Task 2.1 — observable resources, actuator, Block2 manifest
+│   │   ├── observer.py         Task 2.2 — concurrent observe + stale detection + manifest fetch
+│   │   └── proxy.py            Task 2.3 — HTTP→CoAP cross-protocol proxy (RFC 8075)
+│   └── amqp/                   Task 3 (skipped)
+├── tests/
+│   ├── mqtt/
+│   │   ├── test_publisher.py   11 unit tests (mocked broker)
+│   │   └── test_qos_loss.py    QoS comparison — requires live Mosquitto
+│   └── coap/
+│       ├── test_server.py      10 integration tests (real aiocoap server)
+│       └── test_proxy.py       7 integration tests (HTTP→CoAP proxy)
+├── scripts/
+│   ├── capture.sh              Linux/macOS tshark capture
+│   └── capture_win.py          Windows tshark capture (auto-detects interface)
+├── captures/                   .pcap output (git-ignored)
+└── report/
+    ├── packet_analysis.md      Task 4 — MQTT + CoAP wire-level annotations
+    └── comparison_report.md    Task 5 — QoS table, proxy mapping, recommendations
+```
