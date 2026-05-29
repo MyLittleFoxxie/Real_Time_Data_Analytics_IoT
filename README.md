@@ -194,6 +194,8 @@ Student ID: 101011969
 
 ## Quick Start (Windows)
 
+IMPORTANT! This assumes you are inside the ./assignment_2 directory.
+
 ```powershell
 # 1. Start Docker services (Mosquitto + RabbitMQ + InfluxDB)
 docker compose up -d
