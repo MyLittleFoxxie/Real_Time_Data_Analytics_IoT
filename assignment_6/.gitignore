@@ -1,0 +1,17 @@
+# Runtime streaming artifacts (regenerated on every run)
+stream_input/
+stream_window_out/
+checkpoints/
+alerts/
+
+# Derived dataset (produced by src/prepare_data.py)
+iomt_data/icu_readings.csv
+
+# Kaggle source dataset — large, not submitted (see README)
+iomt_data/*.xlsx
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

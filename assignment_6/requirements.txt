@@ -1,0 +1,5 @@
+# Host-side dependencies for the one-time data prep and offline validation only.
+# The Spark Structured Streaming job itself runs inside Docker (bitnami/spark),
+# which already bundles Java + PySpark, so pyspark is intentionally NOT listed here.
+pandas
+openpyxl
